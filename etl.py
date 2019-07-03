@@ -4,6 +4,9 @@ import os
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import udf
 from pyspark.sql.types import TimestampType
+import logging
+
+logging.basicConfig(filename='app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s')
 
 
 def create_spark_session():
@@ -45,31 +48,37 @@ def process_song_data(spark, input_data, output_data):
     output_data_artists = os.path.join(output_data, "artists")
 
     # read song data file
+    logging.info("Reading song data ... ")
     song_df = spark.read.json(song_data)
+    logging.info("Reading song data completed")
 
     # extract columns to create songs table
     songs_table = song_df.selectExpr("song_id",
                                      "title",
                                      "artist_id",
                                      "cast(year as int)",
-                                     "duration")\
-                         .dropDuplicates()
+                                     "duration") \
+        .dropDuplicates()
 
     # write songs table to parquet files partitioned by year and artist
+    logging.info("Writing songs table ... ")
     songs_table.write.parquet(output_data_songs,
                               mode='overwrite',
                               partitionBy=["year", "artist_id"])
+    logging.info("Writing songs table completed.")
 
     # extract columns to create artists table
     artists_table = song_df.selectExpr("artist_id",
                                        "artist_name as name",
                                        "coalesce(nullif(artist_location, ''), 'N/A') as location",
                                        "coalesce(artist_latitude, 0.0) as latitude",
-                                       "coalesce(artist_longitude, 0.0) as longitude")\
-                           .dropDuplicates()
+                                       "coalesce(artist_longitude, 0.0) as longitude") \
+        .dropDuplicates()
 
     # write artists table to parquet files
+    logging.info("Writing artists table ... ")
     artists_table.write.parquet(output_data_artists, mode='overwrite')
+    logging.info("Writing artists table completed.")
 
 
 def process_log_data(spark, input_data, output_data):
@@ -103,11 +112,13 @@ def process_log_data(spark, input_data, output_data):
     input_data_artists = os.path.join(output_data, "artists")
 
     # read log data file
+    logging.info("Reading log data ... ")
     log_df = spark.read.json(log_data)
+    logging.info("Reading log data completed.")
 
     # filter by actions for song plays
-    log_df = log_df.drop_duplicates()\
-                   .filter(log_df.page=="NextSong")
+    log_df = log_df.drop_duplicates() \
+        .filter(log_df.page == "NextSong")
 
     # create udf for time table
     @udf(TimestampType())
@@ -121,28 +132,31 @@ def process_log_data(spark, input_data, output_data):
 
     # create time table
     time_table = log_df.selectExpr("timestamp as start_time",
-                                "hour(timestamp) as hour",
-                                "dayofmonth(timestamp) as day",
-                                "weekofyear(timestamp) as week",
-                                "month(timestamp) as month",
-                                "year(timestamp) as year",
-                                "date_format(timestamp,'E') as weekday")
+                                   "hour(timestamp) as hour",
+                                   "dayofmonth(timestamp) as day",
+                                   "weekofyear(timestamp) as week",
+                                   "month(timestamp) as month",
+                                   "year(timestamp) as year",
+                                   "date_format(timestamp,'E') as weekday")
 
     # write time table to parquet files partitioned by year and month
+    logging.info("Writing time table ... ")
     time_table.write.parquet(output_data_time,
                              mode='overwrite',
                              partitionBy=["year", "month"])
+    logging.info("Writing time table completed.")
 
     # create users table
     user_table = log_df.selectExpr("userId as user_id",
                                    "firstName as first_name",
                                    "lastName as last_name",
                                    "gender",
-                                   "coalesce(nullif(level, ''), 'N/A')"
-                                   )
+                                   "level")
 
     # write user table to parquet files
+    logging.info("Writing users table ... ")
     user_table.write.parquet(output_data_user, mode='overwrite')
+    logging.info("Writing users table completed.")
 
     # read song table
     song_df = spark.read.parquet(input_data_songs)
@@ -151,27 +165,32 @@ def process_log_data(spark, input_data, output_data):
     artists_df = spark.read.parquet(input_data_artists)
 
     # create songplays table
-    songplays_table = log_df.alias("lg")\
-                            .filter(log_df.page == "NextSong")\
-                            .join(song_df.alias("sg"),
-                                  log_df.song == song_df.title, "leftouter")\
-                            .join(artists_df.alias("ar"),
-                                  log_df.artist == artists_df.name, "leftouter")\
-                            .selectExpr("lg.timestamp as start_time",
-                                        "lg.userId as user_id",
-                                        "lg.level as level",
-                                        "sg.song_id as song_id",
-                                        "coalesce(ar.artist_id, sg.artist_id) as artist_id",
-                                        "lg.sessionId as session_id",
-                                        "ar.location as location",
-                                        "lg.userAgent as user_agent")\
-                            .dropDuplicates()
+    songplays_table = log_df.alias("lg") \
+        .filter(log_df.page == "NextSong") \
+        .join(song_df.alias("sg"),
+              log_df.song == song_df.title, "leftouter") \
+        .join(artists_df.alias("ar"),
+              log_df.artist == artists_df.name, "leftouter") \
+        .selectExpr("monotonically_increasing_id() as songplay_id",
+                    "lg.timestamp as start_time",
+                    "year(lg.timestamp) as year",
+                    "month(lg.timestamp) as month",
+                    "lg.userId as user_id",
+                    "lg.level as level",
+                    "sg.song_id as song_id",
+                    "coalesce(ar.artist_id, sg.artist_id) as artist_id",
+                    "lg.sessionId as session_id",
+                    "ar.location as location",
+                    "lg.userAgent as user_agent") \
+        .dropDuplicates()
 
     # write songplays table to parquet files partitioned by year and
     # month
+    logging.info("Writing songplays table ... ")
     songplays_table.write.parquet(output_data_songplays,
                                   mode='overwrite',
-                                  partitionBY=["year", "month"])
+                                  partitionBy=["year", "month"])
+    logging.info("Writing songplays table completed.")
 
 
 def main():
@@ -179,10 +198,12 @@ def main():
     config.read('dl.cfg')
 
     # set aws credentials
+    logging.info("Reading AWS credentials ... ")
     os.environ['AWS_ACCESS_KEY_ID'] = config['AWS']['KEY']
     os.environ['AWS_SECRET_ACCESS_KEY'] = config['AWS']['SECRET']
 
     # create spark session
+    logging.info("Creating spark session ... ")
     spark = create_spark_session()
 
     # if the above doesn't work
@@ -197,8 +218,12 @@ def main():
 
     input_data = config['S3']['S3_BUCKET_INPUT_PATH']
     output_data = config['S3']['S3_BUCKET_OUTPUT_PATH']
+    logging.info("Processing song data ... ")
     process_song_data(spark, input_data, output_data)
+    logging.info("Processing song data completed.")
+    logging.info("Processing log data ... ")
     process_log_data(spark, input_data, output_data)
+    logging.info("Processing log data completed.")
 
 
 if __name__ == "__main__":

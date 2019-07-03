@@ -95,8 +95,8 @@ For the most popular songs over the time (considering your schema name
 is sparkify)
 ```
 SELECT s.title, count(*) as count
-FROM sparkify.songplays sp
-INNER JOIN sparkify.songs s ON s.song_id = sp.song_id
+FROM songplays sp
+INNER JOIN songs s ON s.song_id = sp.song_id
 GROUP BY s.title
 ORDER BY count DESC, s.title ASC
 ```
@@ -104,9 +104,9 @@ For the most popular artists and their songs over the time (considering
 your schema name is sparkify)
 ```
 SELECT ar.name, s.title, count(*) as count
-FROM sparkify.songplays sp
-INNER JOIN sparkify.songs s ON s.song_id = sp.song_id
-INNER JOIN sparkify.artists ar ON ar.artist_id = sp.artist_id
+FROM songplays sp
+INNER JOIN songs s ON s.song_id = sp.song_id
+INNER JOIN artists ar ON ar.artist_id = sp.artist_id
 GROUP BY ar.name, s.title
 ORDER BY count DESC, ar.name, s.title ASC;
 ```
