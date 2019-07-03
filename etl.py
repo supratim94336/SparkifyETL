@@ -62,18 +62,28 @@ def process_song_data(spark, input_data, output_data):
 
     # extract columns to create artists table
     artists_table = song_df.selectExpr("artist_id",
-                                   "artist_name as name",
-                                   "coalesce(nullif(artist_location, ''), 'N/A') as location",
-                                   "coalesce(artist_latitude, 0.0) as latitude",
-                                   "coalesce(artist_longitude, 0.0) as longitude")\
-                            .dropDuplicates()
-
+                                       "artist_name as name",
+                                       "coalesce(nullif(artist_location, ''), 'N/A') as location",
+                                       "coalesce(artist_latitude, 0.0) as latitude",
+                                       "coalesce(artist_longitude, 0.0) as longitude")\
+                           .dropDuplicates()
 
     # write artists table to parquet files
     artists_table.write.parquet(output_data_artists, mode='overwrite')
 
 
 def process_log_data(spark, input_data, output_data):
+    """
+    func: This function takes 3 input, reads from an s3 bucket and writes
+    in parquet format to another s3 bucket with the help of apache
+    spark.
+    motivation: This function reads metadata files in json format to
+    create songplays, users and time table
+    :param spark: spark session for data transformation and warehousing
+    :param input_data: the input directory
+    :param output_data: the write directory
+    :return:
+    """
     # get filepath to log data file
     log_data = os.path.join(input_data, "log_data/*.json")
 
@@ -125,14 +135,14 @@ def process_log_data(spark, input_data, output_data):
 
     # create users table
     user_table = log_df.selectExpr("userId as user_id",
-                                "firstName as first_name",
-                                "lastName as last_name",
-                                "gender",
-                                "coalesce(nullif(level, ''), 'N/A')"
-                                )
+                                   "firstName as first_name",
+                                   "lastName as last_name",
+                                   "gender",
+                                   "coalesce(nullif(level, ''), 'N/A')"
+                                   )
+
     # write user table to parquet files
-    user_table.write.parquet(output_data_user,
-                             mode='overwrite')
+    user_table.write.parquet(output_data_user, mode='overwrite')
 
     # read song table
     song_df = spark.read.parquet(input_data_songs)
@@ -175,7 +185,7 @@ def main():
     # create spark session
     spark = create_spark_session()
 
-    # for safety set like this
+    # if the above doesn't work
     # option 2
     access_key = config['AWS']['KEY']
     secret_key = config['AWS']['SECRET']
